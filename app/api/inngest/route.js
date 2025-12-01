@@ -4,7 +4,8 @@ import {
   syncUserCreation,
   syncUserUpdation,
   syncUserDeletion
-} from "@/config/inngest.js";
+} from "../../../lib/inngest";
+
 
 
 
