@@ -10,50 +10,52 @@ const ProductCard = ({ product }) => {
     return (
         <div
             onClick={() => { router.push('/product/' + product._id); scrollTo(0, 0) }}
-            className="flex flex-col items-start gap-0.5 max-w-[200px] w-full cursor-pointer"
+            className="flex flex-col items-start gap-1 max-w-[240px] w-full cursor-pointer group bg-white rounded-xl overflow-hidden border border-gray-200 hover:shadow-xl transition-all duration-300"
         >
-            <div className="cursor-pointer group relative bg-gray-500/10 rounded-lg w-full h-52 flex items-center justify-center">
+            <div className="cursor-pointer relative bg-gradient-to-br from-blue-50 to-gray-50 w-full h-56 flex items-center justify-center overflow-hidden">
                 <Image
                     src={product.image[0]}
                     alt={product.name}
-                    className="group-hover:scale-105 transition object-cover w-4/5 h-4/5 md:w-full md:h-full"
+                    className="group-hover:scale-110 transition-transform duration-300 object-cover w-4/5 h-4/5"
                     width={800}
                     height={800}
                 />
-                <button className="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md">
+                <button onClick={(e) => { e.stopPropagation(); }} className="absolute top-3 right-3 bg-white p-2.5 rounded-full shadow-lg hover:bg-blue-50 transition">
                     <Image
-                        className="h-3 w-3"
+                        className="h-4 w-4"
                         src={assets.heart_icon}
                         alt="heart_icon"
                     />
                 </button>
             </div>
 
-            <p className="md:text-base font-medium pt-2 w-full truncate">{product.name}</p>
-            <p className="w-full text-xs text-gray-500/70 max-sm:hidden truncate">{product.description}</p>
-            <div className="flex items-center gap-2">
-                <p className="text-xs">{4.5}</p>
-                <div className="flex items-center gap-0.5">
-                    {Array.from({ length: 5 }).map((_, index) => (
-                        <Image
-                            key={index}
-                            className="h-3 w-3"
-                            src={
-                                index < Math.floor(4)
-                                    ? assets.star_icon
-                                    : assets.star_dull_icon
-                            }
-                            alt="star_icon"
-                        />
-                    ))}
+            <div className="p-4 w-full">
+                <p className="text-base font-semibold text-gray-800 w-full truncate">{product.name}</p>
+                <p className="w-full text-xs text-gray-500 mt-1 max-sm:hidden truncate">{product.description}</p>
+                <div className="flex items-center gap-2 mt-2">
+                    <p className="text-xs font-medium text-gray-700">{4.5}</p>
+                    <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, index) => (
+                            <Image
+                                key={index}
+                                className="h-3 w-3"
+                                src={
+                                    index < Math.floor(4)
+                                        ? assets.star_icon
+                                        : assets.star_dull_icon
+                                }
+                                alt="star_icon"
+                            />
+                        ))}
+                    </div>
                 </div>
-            </div>
 
-            <div className="flex items-end justify-between w-full mt-1">
-                <p className="text-base font-medium">{currency}{product.offerPrice}</p>
-                <button className=" max-sm:hidden px-4 py-1.5 text-gray-500 border border-gray-500/20 rounded-full text-xs hover:bg-slate-50 transition">
-                    Buy now
-                </button>
+                <div className="flex items-center justify-between w-full mt-3">
+                    <p className="text-xl font-bold text-blue-600">{currency}{product.offerPrice}</p>
+                    <button onClick={(e) => { e.stopPropagation(); }} className="max-sm:hidden px-5 py-2 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition">
+                        Buy now
+                    </button>
+                </div>
             </div>
         </div>
     )
