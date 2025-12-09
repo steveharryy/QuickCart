@@ -1,8 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
-import { auth } from '@clerk/nextjs/server';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { auth } from "@clerk/nextjs/server";
+import { connectToDB } from "../../../lib/connectToDB";
+import Order from "../../../lib/models/order.model";
+import User from "../../../lib/models/user.model";
 
 export async function POST(req) {
   try {
@@ -12,69 +11,46 @@ export async function POST(req) {
       return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const { items, amount, addressId } = await req.json();
+    const { items, amount, address } = await req.json();
 
-    if (!items || !amount || !addressId) {
+    if (!items || !amount || !address) {
       return Response.json({ success: false, message: "Missing required fields" }, { status: 400 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    await connectToDB();
 
-    const { data: order, error } = await supabase
-      .from('orders')
-      .insert({
-        user_id: userId,
-        items,
-        amount,
-        address_id: addressId,
-        status: 'Order Placed',
-        payment_method: 'COD',
-        payment_status: 'Pending'
-      })
-      .select()
-      .single();
+    const newOrder = await Order.create({
+      userId,
+      items,
+      amount,
+      address,
+      status: "Order Placed",
+    });
 
-    if (error) {
-      console.error('Order creation error:', error);
-      return Response.json({ success: false, message: error.message }, { status: 500 });
-    }
+    await User.findByIdAndUpdate(userId, { cartItems: {} });
 
-    await supabase
-      .from('users')
-      .update({ cart_items: {} })
-      .eq('id', userId);
+    return Response.json({ success: true, order: newOrder });
 
-    return Response.json({ success: true, order });
   } catch (error) {
-    console.error('Order creation error:', error);
+    console.error("Order error:", error);
     return Response.json({ success: false, message: error.message }, { status: 500 });
   }
 }
 
-export async function GET(req) {
+export async function GET() {
   try {
     const { userId } = await auth();
-
     if (!userId) {
       return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const { data: orders, error } = await supabase
-      .from('orders')
-      .select('*, addresses(*)')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Fetch orders error:', error);
-      return Response.json({ success: false, message: error.message }, { status: 500 });
-    }
+    await connectToDB();
+    const orders = await Order.find({ userId }).sort({ date: -1 });
 
     return Response.json({ success: true, orders });
+
   } catch (error) {
-    console.error('Fetch orders error:', error);
     return Response.json({ success: false, message: error.message }, { status: 500 });
   }
 }
+
