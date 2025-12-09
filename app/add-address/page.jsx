@@ -4,13 +4,17 @@ import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import Image from "next/image";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 const AddAddress = () => {
 
+    const router = useRouter();
+    const [loading, setLoading] = useState(false);
     const [address, setAddress] = useState({
         fullName: '',
         phoneNumber: '',
-        pincode: '', 
+        pincode: '',
         area: '',
         city: '',
         state: '',
@@ -19,6 +23,35 @@ const AddAddress = () => {
     const onSubmitHandler = async (e) => {
         e.preventDefault();
 
+        if (!address.fullName || !address.phoneNumber || !address.pincode || !address.area || !address.city || !address.state) {
+            toast.error('Please fill all fields');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const res = await fetch('/api/addresses', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(address)
+            });
+
+            const data = await res.json();
+
+            if (data.success) {
+                toast.success('Address saved successfully!');
+                router.push('/cart');
+            } else {
+                toast.error(data.message || 'Failed to save address');
+            }
+        } catch (error) {
+            console.error('Error saving address:', error);
+            toast.error('Failed to save address');
+        } finally {
+            setLoading(false);
+        }
     }
 
     return (
@@ -76,8 +109,12 @@ const AddAddress = () => {
                             />
                         </div>
                     </div>
-                    <button type="submit" className="max-w-sm w-full mt-6 bg-orange-600 text-white py-3 hover:bg-orange-700 uppercase">
-                        Save address
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="max-w-sm w-full mt-6 bg-orange-600 text-white py-3 hover:bg-orange-700 uppercase disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                        {loading ? 'Saving...' : 'Save address'}
                     </button>
                 </form>
                 <Image
