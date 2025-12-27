@@ -9,71 +9,59 @@ const supabaseServiceKey =
 
 export async function POST(req) {
   try {
-    // 1️⃣ AUTH CHECK
     const { userId } = await auth();
 
     if (!userId) {
-      return Response.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
+      return Response.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // 2️⃣ READ BODY
     const { items, addressId } = await req.json();
 
-    console.log("ITEMS FROM FRONTEND:", items);
-    console.log("ADDRESS ID:", addressId);
+    console.log("ITEMS:", items);
+    console.log("ADDRESS ID:", addressId, typeof addressId);
 
-    if (!items || items.length === 0 || !addressId) {
+    if (!items?.length || !addressId) {
       return Response.json(
-        { success: false, message: "Missing required fields" },
+        { message: "Missing items or address" },
         { status: 400 }
       );
     }
 
-    // 3️⃣ SUPABASE CLIENT
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 4️⃣ FETCH ADDRESS
-    const { data: address, error: addressError } = await supabase
-      .from('addresses')
-      .select('*')
-      .eq('id', Number(addressId))
-      .single();
+    // 🔐 ADDRESS CHECK (SAFE FOR NUMBER OR UUID)
+    const addressQuery =
+      typeof addressId === "number"
+        ? supabase.from("addresses").select("*").eq("id", addressId)
+        : supabase.from("addresses").select("*").eq("id", addressId);
+
+    const { data: address, error: addressError } = await addressQuery.single();
 
     if (addressError || !address) {
       return Response.json(
-        { success: false, message: "Address not found" },
+        { message: "Address not found" },
         { status: 404 }
       );
     }
 
-    // 5️⃣ BUILD STRIPE LINE ITEMS
     const lineItems = [];
 
     for (const item of items) {
-      console.log("LOOKING FOR PRODUCT ID:", item.id);
+      const productId = Number(item.id);
 
-      const { data: product, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('id', Number(item.id)) // 🔴 IMPORTANT FIX
+      const { data: product } = await supabase
+        .from("products")
+        .select("*")
+        .eq("id", productId)
         .single();
 
-      console.log("FOUND PRODUCT:", product);
-
-      if (error || !product) {
-        console.error("Product not found:", item.id);
-        continue;
-      }
+      if (!product) continue;
 
       lineItems.push({
         price_data: {
-          currency: 'usd',
+          currency: "usd",
           product_data: {
             name: product.name,
-            description: product.description || '',
           },
           unit_amount: Math.round(
             (product.offer_price ?? product.price) * 100
@@ -83,40 +71,31 @@ export async function POST(req) {
       });
     }
 
-    // 6️⃣ ENSURE LINE ITEMS EXIST
-    if (lineItems.length === 0) {
+    if (!lineItems.length) {
       return Response.json(
-        { success: false, message: "No valid items to checkout" },
+        { message: "No valid items to checkout" },
         { status: 400 }
       );
     }
 
-    console.log("FINAL STRIPE LINE ITEMS:", lineItems);
-
-    // 7️⃣ CREATE STRIPE SESSION
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: "payment",
       line_items: lineItems,
       success_url: `${process.env.NEXT_PUBLIC_APP_URL}/order-placed?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/cart`,
       metadata: {
         userId,
-        addressId: addressId.toString(),
-        items: JSON.stringify(items),
+        addressId: String(addressId),
       },
     });
 
-    // 8️⃣ RETURN STRIPE URL
-    return Response.json({
-      success: true,
-      url: session.url,
-    });
-
+    return Response.json({ url: session.url });
   } catch (error) {
-    console.error("Stripe checkout error:", error);
+    console.error("CREATE CHECKOUT ERROR:", error);
     return Response.json(
-      { success: false, message: error.message },
+      { message: error.message },
       { status: 500 }
     );
   }
 }
+
