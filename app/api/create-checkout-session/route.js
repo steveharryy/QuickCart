@@ -9,53 +9,68 @@ const supabaseServiceKey =
 
 export async function POST(req) {
   try {
+    // 1️⃣ AUTH
     const { userId } = await auth();
-
     if (!userId) {
       return Response.json({ message: "Unauthorized" }, { status: 401 });
     }
 
+    // 2️⃣ BODY
     const { items, addressId } = await req.json();
 
-    console.log("ITEMS:", items);
-    console.log("ADDRESS ID:", addressId, typeof addressId);
+    console.log("RAW ITEMS FROM FRONTEND:", items);
+    console.log("ADDRESS ID:", addressId);
 
-    if (!items?.length || !addressId) {
+    if (!Array.isArray(items) || items.length === 0 || !addressId) {
       return Response.json(
         { message: "Missing items or address" },
         { status: 400 }
       );
     }
 
+    // 3️⃣ SUPABASE
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 🔐 ADDRESS CHECK (SAFE FOR NUMBER OR UUID)
-    const addressQuery =
-      typeof addressId === "number"
-        ? supabase.from("addresses").select("*").eq("id", addressId)
-        : supabase.from("addresses").select("*").eq("id", addressId);
+    // 4️⃣ ADDRESS CHECK
+    const { data: address } = await supabase
+      .from("addresses")
+      .select("*")
+      .eq("id", addressId)
+      .single();
 
-    const { data: address, error: addressError } = await addressQuery.single();
-
-    if (addressError || !address) {
+    if (!address) {
       return Response.json(
         { message: "Address not found" },
         { status: 404 }
       );
     }
 
+    // 5️⃣ BUILD LINE ITEMS
     const lineItems = [];
 
     for (const item of items) {
-      const productId = Number(item.id);
+      // ✅ SUPPORT BOTH id AND product_id
+      const productId =
+        Number(item.product_id) ||
+        Number(item.id);
+
+      console.log("TRYING PRODUCT ID:", productId);
+
+      if (!productId || Number.isNaN(productId)) {
+        console.error("INVALID PRODUCT ID:", item);
+        continue;
+      }
 
       const { data: product } = await supabase
         .from("products")
-        .select("*")
+        .select("id, name, price, offer_price")
         .eq("id", productId)
         .single();
 
-      if (!product) continue;
+      if (!product) {
+        console.error("PRODUCT NOT FOUND IN DB:", productId);
+        continue;
+      }
 
       lineItems.push({
         price_data: {
@@ -67,17 +82,24 @@ export async function POST(req) {
             (product.offer_price ?? product.price) * 100
           ),
         },
-        quantity: item.quantity,
+        quantity: Number(item.quantity) || 1,
       });
     }
 
-    if (!lineItems.length) {
+    console.log("FINAL STRIPE LINE ITEMS:", lineItems);
+
+    // 6️⃣ HARD FAIL IF EMPTY
+    if (lineItems.length === 0) {
       return Response.json(
-        { message: "No valid items to checkout" },
+        {
+          message:
+            "No valid items to checkout. Product IDs sent from frontend do not match products table.",
+        },
         { status: 400 }
       );
     }
 
+    // 7️⃣ STRIPE SESSION
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: lineItems,
@@ -98,4 +120,5 @@ export async function POST(req) {
     );
   }
 }
+
 
