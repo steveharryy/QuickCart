@@ -9,56 +9,81 @@ const supabaseServiceKey =
 
 export async function POST(req) {
   try {
+    // 1️⃣ AUTH CHECK
     const { userId } = await auth();
 
     if (!userId) {
-      return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return Response.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
     }
 
+    // 2️⃣ READ BODY
     const { items, addressId } = await req.json();
 
+    console.log("ITEMS FROM FRONTEND:", items);
+    console.log("ADDRESS ID:", addressId);
+
     if (!items || items.length === 0 || !addressId) {
-      return Response.json({ success: false, message: "Missing required fields" }, { status: 400 });
+      return Response.json(
+        { success: false, message: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
+    // 3️⃣ SUPABASE CLIENT
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: address } = await supabase
+    // 4️⃣ FETCH ADDRESS
+    const { data: address, error: addressError } = await supabase
       .from('addresses')
       .select('*')
-      .eq('id', addressId)
+      .eq('id', Number(addressId))
       .single();
 
-    if (!address) {
-      return Response.json({ success: false, message: "Address not found" }, { status: 404 });
+    if (addressError || !address) {
+      return Response.json(
+        { success: false, message: "Address not found" },
+        { status: 404 }
+      );
     }
 
+    // 5️⃣ BUILD STRIPE LINE ITEMS
     const lineItems = [];
 
     for (const item of items) {
-      const { data: product } = await supabase
+      console.log("LOOKING FOR PRODUCT ID:", item.id);
+
+      const { data: product, error } = await supabase
         .from('products')
         .select('*')
-        .eq('id', item.id)
+        .eq('id', Number(item.id)) // 🔴 IMPORTANT FIX
         .single();
 
-      if (!product) continue;
+      console.log("FOUND PRODUCT:", product);
+
+      if (error || !product) {
+        console.error("Product not found:", item.id);
+        continue;
+      }
 
       lineItems.push({
         price_data: {
           currency: 'usd',
           product_data: {
             name: product.name,
-            description: product.description,
+            description: product.description || '',
           },
           unit_amount: Math.round(
-            (product.offer_price || product.price) * 100
+            (product.offer_price ?? product.price) * 100
           ),
         },
         quantity: item.quantity,
       });
     }
 
+    // 6️⃣ ENSURE LINE ITEMS EXIST
     if (lineItems.length === 0) {
       return Response.json(
         { success: false, message: "No valid items to checkout" },
@@ -66,8 +91,9 @@ export async function POST(req) {
       );
     }
 
-    console.log("STRIPE LINE ITEMS:", lineItems);
+    console.log("FINAL STRIPE LINE ITEMS:", lineItems);
 
+    // 7️⃣ CREATE STRIPE SESSION
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: lineItems,
@@ -75,15 +101,22 @@ export async function POST(req) {
       cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/cart`,
       metadata: {
         userId,
-        addressId,
+        addressId: addressId.toString(),
         items: JSON.stringify(items),
       },
     });
 
-    return Response.json({ success: true, url: session.url });
+    // 8️⃣ RETURN STRIPE URL
+    return Response.json({
+      success: true,
+      url: session.url,
+    });
+
   } catch (error) {
-    console.error('Stripe checkout error:', error);
-    return Response.json({ success: false, message: error.message }, { status: 500 });
+    console.error("Stripe checkout error:", error);
+    return Response.json(
+      { success: false, message: error.message },
+      { status: 500 }
+    );
   }
 }
-
