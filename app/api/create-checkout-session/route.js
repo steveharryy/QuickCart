@@ -48,15 +48,11 @@ export async function POST(req) {
     // 5️⃣ BUILD LINE ITEMS
     const lineItems = [];
 
-  for (const item of items) {
-  const productId = item.product_id || item.id;
+    
+for (const item of items) {
+  const productId = item.product_id;
 
-  console.log("LOOKING UP PRODUCT UUID:", productId, typeof productId);
-
-  if (!productId) {
-    console.error("INVALID PRODUCT ID:", item);
-    continue;
-  }
+  console.log("LOOKING UP PRODUCT ID:", productId);
 
   const { data: product } = await supabase
     .from("products")
@@ -72,9 +68,7 @@ export async function POST(req) {
   lineItems.push({
     price_data: {
       currency: "usd",
-      product_data: {
-        name: product.name,
-      },
+      product_data: { name: product.name },
       unit_amount: Math.round(
         (product.offer_price ?? product.price) * 100
       ),
