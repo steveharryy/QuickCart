@@ -50,9 +50,8 @@ export async function POST(req) {
 
     for (const item of items) {
       // ✅ SUPPORT BOTH id AND product_id
-      const productId =
-        Number(item.product_id) ||
-        Number(item.id);
+     const productId = item.product_id || item.id;
+
 
       console.log("TRYING PRODUCT ID:", productId);
 
