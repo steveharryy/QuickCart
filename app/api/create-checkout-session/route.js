@@ -48,42 +48,41 @@ export async function POST(req) {
     // 5️⃣ BUILD LINE ITEMS
     const lineItems = [];
 
-    for (const item of items) {
-      // ✅ SUPPORT BOTH id AND product_id
-     const productId = item.product_id || item.id;
+  for (const item of items) {
+  const productId = item.product_id || item.id;
 
+  console.log("LOOKING UP PRODUCT UUID:", productId, typeof productId);
 
-      console.log("TRYING PRODUCT ID:", productId);
+  if (!productId) {
+    console.error("INVALID PRODUCT ID:", item);
+    continue;
+  }
 
-      if (!productId || Number.isNaN(productId)) {
-        console.error("INVALID PRODUCT ID:", item);
-        continue;
-      }
+  const { data: product } = await supabase
+    .from("products")
+    .select("id, name, price, offer_price")
+    .eq("id", productId)
+    .single();
 
-      const { data: product } = await supabase
-        .from("products")
-        .select("id, name, price, offer_price")
-        .eq("id", productId)
-        .single();
+  if (!product) {
+    console.error("PRODUCT NOT FOUND:", productId);
+    continue;
+  }
 
-      if (!product) {
-        console.error("PRODUCT NOT FOUND IN DB:", productId);
-        continue;
-      }
+  lineItems.push({
+    price_data: {
+      currency: "usd",
+      product_data: {
+        name: product.name,
+      },
+      unit_amount: Math.round(
+        (product.offer_price ?? product.price) * 100
+      ),
+    },
+    quantity: Number(item.quantity) || 1,
+  });
+}
 
-      lineItems.push({
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: product.name,
-          },
-          unit_amount: Math.round(
-            (product.offer_price ?? product.price) * 100
-          ),
-        },
-        quantity: Number(item.quantity) || 1,
-      });
-    }
 
     console.log("FINAL STRIPE LINE ITEMS:", lineItems);
 
