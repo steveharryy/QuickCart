@@ -1,150 +1,88 @@
+import { auth } from '@clerk/nextjs/server';
 import { stripe } from '../../../lib/stripe';
 import { createClient } from '@supabase/supabase-js';
-import nodemailer from 'nodemailer';
-import { currentUser, clerkClient } from '@clerk/nextjs/server';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 export async function POST(req) {
-  const body = await req.text();
-  const sig = req.headers.get('stripe-signature');
-
-  let event;
-
   try {
-    event = stripe.webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return Response.json({ error: 'Webhook Error' }, { status: 400 });
-  }
+    const { userId } = await auth();
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
+    if (!userId) {
+      return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
 
-    try {
-      const { userId, addressId, items, amount } = session.metadata;
+    const { items, addressId } = await req.json();
 
-      const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    if (!items || items.length === 0 || !addressId) {
+      return Response.json({ success: false, message: "Missing required fields" }, { status: 400 });
+    }
 
-      const clerk = await clerkClient();
-      const user = await clerk.users.getUser(userId);
-      const userEmail = user.emailAddresses[0].emailAddress;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-      const parsedItems = JSON.parse(items);
-      const detailedItems = [];
+    const { data: address } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('id', addressId)
+      .single();
 
-      for (const item of parsedItems) {
-        const { data: product, error } = await supabase
-          .from('products')
-          .select('*')
-          .eq('id', item.id)
-          .single();
+    if (!address) {
+      return Response.json({ success: false, message: "Address not found" }, { status: 404 });
+    }
 
-        if (error || !product) {
-          console.error('Product not found:', item.id);
-          continue;
-        }
+    const lineItems = [];
 
-        let image_url = null;
-        const img = product.image;
-
-        if (img == null) image_url = null;
-        else if (typeof img === 'string') {
-          try {
-            const parsed = JSON.parse(img);
-            image_url = Array.isArray(parsed) ? parsed[0] : parsed;
-          } catch {
-            image_url = img.replace(/[\[\]']/g, '').trim();
-          }
-        } else if (Array.isArray(img)) image_url = img[0];
-        else if (typeof img === 'object') image_url = img.url || img.src || null;
-        else image_url = String(img);
-
-        detailedItems.push({
-          product_id: product.id,
-          name: product.name,
-          image_url,
-          price: product.offer_price || product.price,
-          quantity: item.quantity,
-        });
-      }
-
-      const { data: order, error: insertError } = await supabase
-        .from('orders')
-        .insert({
-          user_id: userId,
-          email: userEmail,
-          items: detailedItems,
-          amount: parseFloat(amount),
-          address_id: addressId,
-          status: 'Order Placed',
-          payment_method: 'Stripe',
-          payment_status: 'Paid',
-          stripe_session_id: session.id,
-        })
-        .select('*, addresses(*)')
+    for (const item of items) {
+      const { data: product } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', item.id)
         .single();
 
-      if (insertError) {
-        console.error('Order creation error:', insertError);
-        return Response.json({ error: 'Order creation failed' }, { status: 500 });
-      }
+      if (!product) continue;
 
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+      lineItems.push({
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: product.name,
+            description: product.description,
+          },
+          unit_amount: Math.round(
+            (product.offer_price || product.price) * 100
+          ),
         },
+        quantity: item.quantity,
       });
-
-      const emailHtml = `
-        <h2>Your Order is Confirmed!</h2>
-        <p>Thank you for shopping with QuickCart. Your payment was successful.</p>
-
-        <h3>Order Summary:</h3>
-        <ul>
-          ${order.items
-            .map(
-              (item) =>
-                `<li><strong>${item.name}</strong> — Qty: ${item.quantity}</li>`
-            )
-            .join('')}
-        </ul>
-
-        <p><strong>Total Amount:</strong> $${order.amount}</p>
-        <p><strong>Payment Method:</strong> ${order.payment_method}</p>
-        <p><strong>Status:</strong> ${order.status}</p>
-
-        <h3>Delivery Address:</h3>
-        <p>
-          ${order.addresses.full_name}<br />
-          ${order.addresses.area}<br />
-          ${order.addresses.city}, ${order.addresses.state}<br />
-          ${order.addresses.phone_number}
-        </p>
-
-        <p>Estimated Delivery: 4 days</p>
-      `;
-
-      await transporter.sendMail({
-        from: `QuickCart <${process.env.SMTP_USER}>`,
-        to: userEmail,
-        subject: 'Your QuickCart Order Confirmation - Payment Successful',
-        html: emailHtml,
-      });
-
-      console.log('Order created and email sent for session:', session.id);
-    } catch (error) {
-      console.error('Webhook processing error:', error);
-      return Response.json({ error: 'Processing failed' }, { status: 500 });
     }
-  }
 
-  return Response.json({ received: true });
+    if (lineItems.length === 0) {
+      return Response.json(
+        { success: false, message: "No valid products found for checkout" },
+        { status: 400 }
+      );
+    }
+
+    console.log("STRIPE LINE ITEMS:", lineItems);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: lineItems,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/order-placed?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/cart`,
+      metadata: {
+        userId,
+        addressId,
+        items: JSON.stringify(items),
+      },
+    });
+
+    return Response.json({ success: true, url: session.url });
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    return Response.json({ success: false, message: error.message }, { status: 500 });
+  }
 }
