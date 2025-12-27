@@ -1,116 +1,182 @@
-'use client'
+'use client';
+
 import React from "react";
-import { assets } from "../../assets/assets";
-import OrderSummary from "../../components/OrderSummary";
 import Image from "next/image";
 import Navbar from "../../components/Navbar";
+import OrderSummary from "../../components/OrderSummary";
+import { assets } from "../../assets/assets";
 import { useAppContext } from "../../context/AppContext";
 
 const Cart = () => {
-
-  const { products, router, cartItems, addToCart, updateCartQuantity, getCartCount } = useAppContext();
+  const {
+    products,
+    router,
+    cartItems,
+    addToCart,
+    updateCartQuantity,
+    getCartCount,
+  } = useAppContext();
 
   return (
     <>
       <Navbar />
+
       <div className="flex flex-col md:flex-row gap-10 px-6 md:px-16 lg:px-32 pt-14 mb-20">
+        {/* LEFT SIDE */}
         <div className="flex-1">
           <div className="flex items-center justify-between mb-8 border-b-2 border-blue-600 pb-6">
             <p className="text-2xl md:text-3xl font-bold text-gray-900">
               Your <span className="text-blue-600">Cart</span>
             </p>
-            <p className="text-lg md:text-xl font-semibold text-gray-700">{getCartCount()} Items</p>
+            <p className="text-lg md:text-xl font-semibold text-gray-700">
+              {getCartCount()} Items
+            </p>
           </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto">
               <thead className="text-left">
                 <tr>
-                  <th className="text-nowrap pb-6 md:px-4 px-1 text-gray-600 font-medium">
+                  <th className="pb-6 px-2 text-gray-600 font-medium">
                     Product Details
                   </th>
-                  <th className="pb-6 md:px-4 px-1 text-gray-600 font-medium">
+                  <th className="pb-6 px-2 text-gray-600 font-medium">
                     Price
                   </th>
-                  <th className="pb-6 md:px-4 px-1 text-gray-600 font-medium">
+                  <th className="pb-6 px-2 text-gray-600 font-medium">
                     Quantity
                   </th>
-                  <th className="pb-6 md:px-4 px-1 text-gray-600 font-medium">
+                  <th className="pb-6 px-2 text-gray-600 font-medium">
                     Subtotal
                   </th>
                 </tr>
               </thead>
-              <tbody>
-                {Object.keys(cartItems).map((itemId) => {
-                  const product = products.find(product => product._id === itemId);
 
-                  if (!product || cartItems[itemId] <= 0) return null;
+              <tbody>
+                {Object.keys(cartItems).map((productId) => {
+                  // ✅ IMPORTANT: match by product.id (UUID)
+                  const product = products.find(
+                    (p) => p.id === productId
+                  );
+
+                  if (!product || cartItems[productId] <= 0) return null;
+
+                  const quantity = cartItems[productId];
+                  const price = product.offer_price ?? product.price;
 
                   return (
-                    <tr key={itemId}>
-                      <td className="flex items-center gap-4 py-4 md:px-4 px-1">
+                    <tr key={productId}>
+                      {/* PRODUCT */}
+                      <td className="flex items-center gap-4 py-4 px-2">
                         <div>
-                          <div className="rounded-lg overflow-hidden bg-gray-500/10 p-2">
+                          <div className="rounded-lg overflow-hidden bg-gray-100 p-2">
                             <Image
-                              src={product.image[0]}
+                              src={product.image}
                               alt={product.name}
-                              className="w-16 h-auto object-cover mix-blend-multiply"
-                              width={1280}
-                              height={720}
+                              width={80}
+                              height={80}
+                              className="object-cover"
                             />
                           </div>
+
                           <button
-                            className="md:hidden text-xs text-blue-600 mt-1 font-medium hover:text-blue-700"
-                            onClick={() => updateCartQuantity(product._id, 0)}
+                            className="md:hidden text-xs text-blue-600 mt-1 font-medium"
+                            onClick={() =>
+                              updateCartQuantity(product.id, 0)
+                            }
                           >
                             Remove
                           </button>
                         </div>
-                        <div className="text-sm hidden md:block">
-                          <p className="text-gray-800 font-semibold">{product.name}</p>
+
+                        <div className="hidden md:block">
+                          <p className="text-gray-800 font-semibold">
+                            {product.name}
+                          </p>
                           <button
-                            className="text-xs text-blue-600 mt-1 font-medium hover:text-blue-700"
-                            onClick={() => updateCartQuantity(product._id, 0)}
+                            className="text-xs text-blue-600 mt-1 font-medium"
+                            onClick={() =>
+                              updateCartQuantity(product.id, 0)
+                            }
                           >
                             Remove
                           </button>
                         </div>
                       </td>
-                      <td className="py-4 md:px-4 px-1 text-gray-600">${product.offerPrice}</td>
-                      <td className="py-4 md:px-4 px-1">
-                        <div className="flex items-center md:gap-2 gap-1">
-                          <button onClick={() => updateCartQuantity(product._id, cartItems[itemId] - 1)}>
+
+                      {/* PRICE */}
+                      <td className="py-4 px-2 text-gray-600">
+                        ${price.toFixed(2)}
+                      </td>
+
+                      {/* QUANTITY */}
+                      <td className="py-4 px-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() =>
+                              updateCartQuantity(
+                                product.id,
+                                quantity - 1
+                              )
+                            }
+                          >
                             <Image
                               src={assets.decrease_arrow}
-                              alt="decrease_arrow"
-                              className="w-4 h-4"
+                              alt="decrease"
+                              width={16}
+                              height={16}
                             />
                           </button>
-                          <input onChange={e => updateCartQuantity(product._id, Number(e.target.value))} type="number" value={cartItems[itemId]} className="w-8 border text-center appearance-none"></input>
-                          <button onClick={() => addToCart(product._id)}>
+
+                          <input
+                            type="number"
+                            value={quantity}
+                            onChange={(e) =>
+                              updateCartQuantity(
+                                product.id,
+                                Number(e.target.value)
+                              )
+                            }
+                            className="w-10 border text-center"
+                          />
+
+                          <button
+                            onClick={() => addToCart(product.id)}
+                          >
                             <Image
                               src={assets.increase_arrow}
-                              alt="increase_arrow"
-                              className="w-4 h-4"
+                              alt="increase"
+                              width={16}
+                              height={16}
                             />
                           </button>
                         </div>
                       </td>
-                      <td className="py-4 md:px-4 px-1 text-gray-600">${(product.offerPrice * cartItems[itemId]).toFixed(2)}</td>
+
+                      {/* SUBTOTAL */}
+                      <td className="py-4 px-2 text-gray-600">
+                        ${(price * quantity).toFixed(2)}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-          <button onClick={()=> router.push('/all-products')} className="group flex items-center mt-6 gap-2 text-blue-600 font-semibold hover:text-blue-700 transition">
+
+          <button
+            onClick={() => router.push("/all-products")}
+            className="group flex items-center mt-6 gap-2 text-blue-600 font-semibold"
+          >
             <Image
-              className="group-hover:-translate-x-1 transition"
               src={assets.arrow_right_icon_colored}
-              alt="arrow_right_icon_colored"
+              alt="continue"
             />
             Continue Shopping
           </button>
         </div>
+
+        {/* RIGHT SIDE */}
         <OrderSummary />
       </div>
     </>
