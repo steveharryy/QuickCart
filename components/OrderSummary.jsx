@@ -42,98 +42,80 @@ const OrderSummary = () => {
     setIsDropdownOpen(false);
   };
 
-  const createOrder = async () => {
-    if (!selectedAddress) {
-      toast.error("Please select a delivery address");
-      return;
-    }
-
-    if (getCartCount() === 0) {
-      toast.error("Your cart is empty");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-     const orderItems = Object.entries(cartItems).map(
-  ([productId, quantity]) => ({
-    product_id: productId, // ✅ UUID from products.id
-    quantity,
-  })
-);
-
-
-      const totalAmount = getCartAmount() + Math.floor(getCartAmount() * 0.02);
-
-      if (paymentMethod === 'COD') {
-        const res = await fetch("/api/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: orderItems,
-            amount: totalAmount,
-            addressId: selectedAddress.id,
-          }),
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          setCartItems({});
-          toast.success("Order placed successfully!");
-          router.push("/order-placed");
-        } else {
-          toast.error(data.message || "Failed to place order");
-        }
-} else if (paymentMethod === 'Stripe') {
-  const res = await fetch("/api/create-checkout-session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      items: orderItems,            // [{ product_id, quantity }]
-      addressId: selectedAddress.id,
-    }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    toast.error(data.message || "Failed to create checkout session");
+const createOrder = async () => {
+  if (!selectedAddress) {
+    toast.error("Please select a delivery address");
     return;
   }
 
-  const stripe = await stripePromise;
-  await stripe.redirectToCheckout({
-    sessionId: data.sessionId,
-  });
-}
+  if (getCartCount() === 0) {
+    toast.error("Your cart is empty");
+    return;
+  }
 
+  setLoading(true);
 
-        const data = await res.json();
+  try {
+    // ✅ Build checkout items correctly
+    const orderItems = Object.entries(cartItems).map(
+      ([productId, quantity]) => ({
+        product_id: productId,
+        quantity,
+      })
+    );
 
-        if (data.success) {
-          const stripe = await stripePromise;
-          const { error } = await stripe.redirectToCheckout({
-            sessionId: data.sessionId,
-          });
+    if (paymentMethod === "COD") {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: orderItems,
+          addressId: selectedAddress.id,
+        }),
+      });
 
-          if (error) {
-            toast.error(error.message);
-          } else {
-            setCartItems({});
-          }
-        } else {
-          toast.error(data.message || "Failed to create checkout session");
-        }
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Failed to place order");
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Something went wrong");
-    } finally {
-      setLoading(false);
+
+      setCartItems({});
+      toast.success("Order placed successfully!");
+      router.push("/order-placed");
     }
-  };
+
+    if (paymentMethod === "Stripe") {
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: orderItems,
+          addressId: selectedAddress.id,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Failed to create checkout session");
+        return;
+      }
+
+      const stripe = await stripePromise;
+      await stripe.redirectToCheckout({
+        sessionId: data.sessionId,
+      });
+    }
+  } catch (err) {
+    console.error(err);
+    toast.error("Something went wrong");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
 
   useEffect(() => {
