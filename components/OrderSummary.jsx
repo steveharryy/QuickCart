@@ -2,9 +2,6 @@
 import { useAppContext } from "../context/AppContext";
 import React, { useEffect, useState } from "react";
 import toast from "react-hot-toast";
-import { loadStripe } from '@stripe/stripe-js';
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const OrderSummary = () => {
   const {
@@ -22,8 +19,8 @@ const OrderSummary = () => {
   const [userAddresses, setUserAddresses] = useState([]);
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('COD');
+  const [showUpiModal, setShowUpiModal] = useState(false);
 
-  // Fetch Addresses
   const fetchUserAddresses = async () => {
     try {
       const res = await fetch("/api/addresses");
@@ -53,10 +50,14 @@ const createOrder = async () => {
     return;
   }
 
+  if (paymentMethod === "UPI") {
+    setShowUpiModal(true);
+    return;
+  }
+
   setLoading(true);
 
   try {
-    // ✅ Build checkout items correctly
     const orderItems = Object.entries(cartItems).map(
       ([productId, quantity]) => ({
         product_id: productId,
@@ -64,50 +65,25 @@ const createOrder = async () => {
       })
     );
 
-    if (paymentMethod === "COD") {
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: orderItems,
-          addressId: selectedAddress.id,
-        }),
-      });
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: orderItems,
+        addressId: selectedAddress.id,
+      }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (!res.ok) {
-        toast.error(data.message || "Failed to place order");
-        return;
-      }
-
-      setCartItems({});
-      toast.success("Order placed successfully!");
-      router.push("/order-placed");
+    if (!res.ok) {
+      toast.error(data.message || "Failed to place order");
+      return;
     }
 
-    if (paymentMethod === "Stripe") {
-      const res = await fetch("/api/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: orderItems,
-          addressId: selectedAddress.id,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.message || "Failed to create checkout session");
-        return;
-      }
-
-      const stripe = await stripePromise;
-      await stripe.redirectToCheckout({
-        sessionId: data.sessionId,
-      });
-    }
+    setCartItems({});
+    toast.success("Order placed successfully!");
+    router.push("/order-placed");
   } catch (err) {
     console.error(err);
     toast.error("Something went wrong");
@@ -115,8 +91,6 @@ const createOrder = async () => {
     setLoading(false);
   }
 };
-
-
 
   useEffect(() => {
     fetchUserAddresses();
@@ -131,7 +105,6 @@ const createOrder = async () => {
       <hr className="border-blue-200 my-5" />
 
       <div className="space-y-6">
-        {/* Address Dropdown */}
         <div>
           <label className="text-base font-medium uppercase text-gray-600 block mb-2">
             Select Address
@@ -190,7 +163,6 @@ const createOrder = async () => {
           </div>
         </div>
 
-        {/* Payment Method Selection */}
         <div>
           <label className="text-base font-medium uppercase text-gray-600 block mb-3">
             Payment Method
@@ -224,34 +196,33 @@ const createOrder = async () => {
             </div>
 
             <div
-              onClick={() => setPaymentMethod('Stripe')}
+              onClick={() => setPaymentMethod('UPI')}
               className={`flex items-center justify-between p-4 border-2 rounded-lg cursor-pointer transition ${
-                paymentMethod === 'Stripe'
+                paymentMethod === 'UPI'
                   ? 'border-blue-600 bg-blue-50'
                   : 'border-gray-300 bg-white hover:border-blue-400'
               }`}
             >
               <div className="flex items-center gap-3">
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                  paymentMethod === 'Stripe' ? 'border-blue-600' : 'border-gray-400'
+                  paymentMethod === 'UPI' ? 'border-blue-600' : 'border-gray-400'
                 }`}>
-                  {paymentMethod === 'Stripe' && (
+                  {paymentMethod === 'UPI' && (
                     <div className="w-3 h-3 rounded-full bg-blue-600"></div>
                   )}
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900">Card / UPI</p>
-                  <p className="text-xs text-gray-500">Pay securely with Stripe</p>
+                  <p className="font-semibold text-gray-900">Pay with UPI</p>
+                  <p className="text-xs text-gray-500">Scan QR code to pay</p>
                 </div>
               </div>
               <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
               </svg>
             </div>
           </div>
         </div>
 
-        {/* Price Breakdown */}
         <div className="space-y-4">
           <div className="flex justify-between text-base font-medium">
             <p className="uppercase text-gray-600">
@@ -289,8 +260,46 @@ const createOrder = async () => {
         disabled={loading}
         className="w-full bg-blue-600 text-white py-3.5 mt-5 rounded-lg font-semibold hover:bg-blue-700 transition shadow-lg disabled:bg-gray-400 disabled:cursor-not-allowed"
       >
-        {loading ? (paymentMethod === 'Stripe' ? 'Redirecting to Payment...' : 'Placing Order...') : (paymentMethod === 'Stripe' ? 'Proceed to Payment' : 'Place Order')}
+        {loading ? 'Placing Order...' : (paymentMethod === 'UPI' ? 'Pay with UPI' : 'Place Order')}
       </button>
+
+      {showUpiModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-2xl w-full">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Scan QR Code to Pay</h3>
+              <button
+                onClick={() => setShowUpiModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="bg-gray-100 rounded-lg aspect-video flex items-center justify-center">
+              <p className="text-gray-500 text-center">QR Code Image<br />Will be displayed here</p>
+            </div>
+
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+              <p className="text-sm text-gray-700">
+                <strong>Amount to pay:</strong> {currency}{getCartAmount() + Math.floor(getCartAmount() * 0.02)}
+              </p>
+              <p className="text-xs text-gray-600 mt-2">
+                After payment, screenshot and send to confirm your order
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowUpiModal(false)}
+              className="w-full mt-4 bg-gray-200 text-gray-700 py-2.5 rounded-lg font-semibold hover:bg-gray-300 transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
