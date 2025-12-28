@@ -86,20 +86,29 @@ const OrderSummary = () => {
         } else {
           toast.error(data.message || "Failed to place order");
         }
-      } else if (paymentMethod === 'Stripe') {
-        const res = await fetch("/api/create-checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-         const res = await fetch("/api/create-checkout-session", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    items: orderItems,           // ✅ FIXED
-    addressId: selectedAddress.id,
-  }),
-});
+} else if (paymentMethod === 'Stripe') {
+  const res = await fetch("/api/create-checkout-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items: orderItems,            // [{ product_id, quantity }]
+      addressId: selectedAddress.id,
+    }),
+  });
 
-        });
+  const data = await res.json();
+
+  if (!res.ok) {
+    toast.error(data.message || "Failed to create checkout session");
+    return;
+  }
+
+  const stripe = await stripePromise;
+  await stripe.redirectToCheckout({
+    sessionId: data.sessionId,
+  });
+}
+
 
         const data = await res.json();
 
