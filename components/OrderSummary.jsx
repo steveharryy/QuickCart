@@ -56,10 +56,13 @@ const OrderSummary = () => {
     setLoading(true);
 
     try {
-      const orderItems = Object.keys(cartItems).map((id) => ({
-        id,
-        quantity: cartItems[id],
-      }));
+     const orderItems = Object.entries(cartItems).map(
+  ([productId, quantity]) => ({
+    product_id: productId, // ✅ UUID from products.id
+    quantity,
+  })
+);
+
 
       const totalAmount = getCartAmount() + Math.floor(getCartAmount() * 0.02);
 
@@ -87,11 +90,15 @@ const OrderSummary = () => {
         const res = await fetch("/api/create-checkout-session", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: orderItems,
-            amount: totalAmount,
-            addressId: selectedAddress.id,
-          }),
+         const res = await fetch("/api/create-checkout-session", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    items: orderItems,           // ✅ FIXED
+    addressId: selectedAddress.id,
+  }),
+});
+
         });
 
         const data = await res.json();
