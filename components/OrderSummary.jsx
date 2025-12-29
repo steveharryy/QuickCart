@@ -279,8 +279,13 @@ const createOrder = async () => {
             </div>
 
             <div className="bg-gray-100 rounded-lg aspect-video flex items-center justify-center">
-              <p className="text-gray-500 text-center">QR Code Image<br />Will be displayed here</p>
-            </div>
+  <img
+    src="/whatsapp_image_2025-12-29_at_11.29.59.jpeg"
+    alt="PhonePe QR Code"
+    className="w-64 h-64 object-contain"
+  />
+</div>
+
 
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
               <p className="text-sm text-gray-700">
